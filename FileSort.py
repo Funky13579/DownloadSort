@@ -1,8 +1,9 @@
 import hashlib
 import json
-import os
 import logging
+import os
 import shutil
+import sys
 from datetime import date, timedelta
 
 class FileSorter:
@@ -177,7 +178,34 @@ class FileSorter:
                 elif os.path.isdir(file):
                     for subfile in os.listdir(file):
                         self.remove_file_after_time(os.path.join(file, subfile), self.config.get("DELETE_FILES_AFTER_DAYS"))
-
+                        
+    def remove_duplicates(self, path=None) -> None:
+        """ Remove duplicates in the download folder
+            Needs to be called with cmd argument "rm_duplicates"
+            Takes a long time for large folders
+        """
+        
+        if path is None:
+            path = self.config.get("DOWNLOAD_FOLDER_PATH")
+            logging.info(f"Using download directory: {path}")
+        
+        logging.debug(f"Directory listing for {path}: {os.listdir(path)}")
+        
+        for file in os.listdir(path):
+            full_file = os.path.join(path, file)
+            logging.debug(f"    Checking {full_file}")
+            if os.path.isfile(full_file):
+                for file2 in os.listdir(path):
+                    full_file2 = os.path.join(path, file2)
+                    logging.debug(f"        Checking {full_file2}")
+                    if os.path.isfile(full_file2) and full_file != full_file2:
+                        if self.are_files_same(file1=full_file, file2=full_file2):
+                            os.remove(full_file2)
+                            self.filesRemoved += 1
+                            logging.info(f"{file2} was a duplicate of {file} and was removed")
+            elif os.path.isdir(full_file):
+                self.remove_duplicates(path=full_file)
+                
     def print_stats(self):
         logging.info(f"Files found: {self.filesFound}")
         logging.info(f"Files removed: {self.filesRemoved}")
@@ -194,10 +222,20 @@ CONFIG_LAYOUT = {
             "FOLDERS" : { "FOLDER_NAME": ["FILE_SUFFIX_1","FILE_SUFFIX_2"], "FOLDER_NAME2": ["FILE_SUFFIX_1","FILE_SUFFIX_2"] }
         }
 
-logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.INFO,
+if not os.path.isdir("logs"):
+    os.mkdir("logs")
+
+logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 file_sorter = FileSorter(config_layout=CONFIG_LAYOUT)
 file_sorter.clean_logs()
 file_sorter.sort_files()
+
+if sys.argv[1] == "rm_duplicates":
+    logging.info("Removing duplicates")
+    file_sorter.remove_duplicates()
+    logging.info("All duplicates were removed!")
+
+    
 file_sorter.print_stats()

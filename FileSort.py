@@ -189,15 +189,11 @@ class FileSorter:
             path = self.config.get("DOWNLOAD_FOLDER_PATH")
             logging.info(f"Using download directory: {path}")
         
-        logging.debug(f"Directory listing for {path}: {os.listdir(path)}")
-        
         for file in os.listdir(path):
             full_file = os.path.join(path, file)
-            logging.debug(f"    Checking {full_file}")
             if os.path.isfile(full_file):
                 for file2 in os.listdir(path):
                     full_file2 = os.path.join(path, file2)
-                    logging.debug(f"        Checking {full_file2}")
                     if os.path.isfile(full_file2) and full_file != full_file2:
                         if self.are_files_same(file1=full_file, file2=full_file2):
                             os.remove(full_file2)
@@ -225,7 +221,7 @@ CONFIG_LAYOUT = {
 if not os.path.isdir("logs"):
     os.mkdir("logs")
 
-logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.DEBUG,
+logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 file_sorter = FileSorter(config_layout=CONFIG_LAYOUT)

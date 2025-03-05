@@ -6,6 +6,7 @@ import shutil
 import sys
 from datetime import date, timedelta
 
+
 class FileSorter:
     def __init__(self, config_layout):
         self.filesFound: int = 0
@@ -14,6 +15,7 @@ class FileSorter:
         self.filesMoved: int = 0
         self.filesRenamed: int = 0
         self.filesIgnored: int = 0
+        self.root_path = os.getcwd()
         
         try:
             self.config: dict = self.load_config(config_layout=config_layout)
@@ -149,28 +151,27 @@ class FileSorter:
         self.filesIgnored += 1
 
     def clean_logs(self):
-        for file in os.listdir("./logs"):
+        for file in os.listdir(f"{self.root_path}/logs"):
             if file.endswith(".log"):
                 self.remove_file_after_time(f"./logs/{file}", self.config.get("DELETE_LOGS_AFTER_DAYS"))
         
     def sort_files(self) -> None:
         """ Sort files in the download folder """
-        
-        # Go to Downloads folder
         os.chdir(self.config.get("DOWNLOAD_FOLDER_PATH"))
         logging.info("Moved to download directory")
-
-        # Check if Directories are in Config
         self.check_directories()
-
-        # Move Files in Directories
-        for file in os.listdir():
-            if os.path.isfile(file):
-                logging.info(f"File {file} was found.")
-                self.check_file(file)
-
+        # Count files to process (only regular files)
+        files = [f for f in os.listdir() if os.path.isfile(f)]
+        self.total_files = len(files)
+        self.processed_files = 0
+        for file in files:
+            self.processed_files += 1
+            percent = int((self.processed_files / self.total_files) * 100) if self.total_files else 100
+            progress_bar = '#' * (percent // 10) + '-' * (10 - (percent // 10))
+            logging.info(f"Processing {file}: [{progress_bar}] {percent}%")
+            logging.info(f"File {file} was found.")
+            self.check_file(file)
         logging.info("All files were sorted!")
-
         if self.config.get("DELETE_FILES_AFTER_DAYS") > 0:
             for file in os.listdir():
                 if os.path.isfile(file):
@@ -178,7 +179,20 @@ class FileSorter:
                 elif os.path.isdir(file):
                     for subfile in os.listdir(file):
                         self.remove_file_after_time(os.path.join(file, subfile), self.config.get("DELETE_FILES_AFTER_DAYS"))
-                        
+    
+    def get_progress_percent(self) -> int:
+        """Returns current progress percentage."""
+        if hasattr(self, 'total_files') and self.total_files:
+            return int((self.processed_files / self.total_files) * 100)
+        return 0
+    
+    def get_progress_bar(self) -> str:
+        """Returns a string representing the progress bar and percentage."""
+        percent = self.get_progress_percent()
+        filled = '#' * (percent // 10)
+        empty = '-' * (10 - (percent // 10))
+        return f"[{filled}{empty}] {percent}%"
+
     def remove_duplicates(self, path=None) -> None:
         """ Remove duplicates in the download folder
             Needs to be called with cmd argument "rm_duplicates"
@@ -210,28 +224,60 @@ class FileSorter:
         logging.info(f"Files renamed: {self.filesRenamed}")
         logging.info(f"Files ignored: {self.filesIgnored}")
     
-CONFIG_LAYOUT = {
-            "DOWNLOAD_FOLDER_PATH" : "path/to/downloadfolder",
-            "ALLOW_DUPLICATES" : False,
-            "DELETE_LOGS_AFTER_DAYS" : -1,
-            "DELETE_FILES_AFTER_DAYS" : -1,
-            "FOLDERS" : { "FOLDER_NAME": ["FILE_SUFFIX_1","FILE_SUFFIX_2"], "FOLDER_NAME2": ["FILE_SUFFIX_1","FILE_SUFFIX_2"] }
-        }
-
-if not os.path.isdir("logs"):
-    os.mkdir("logs")
-
-logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-
-file_sorter = FileSorter(config_layout=CONFIG_LAYOUT)
-file_sorter.clean_logs()
-file_sorter.sort_files()
-
-if sys.argv[1] == "rm_duplicates":
-    logging.info("Removing duplicates")
-    file_sorter.remove_duplicates()
-    logging.info("All duplicates were removed!")
-
+    def start_sorting(self, *args) -> None:
+        """Starts sorting based on provided arguments."""
+        self.clean_logs()
+        self.sort_files()
+        if 'rm_duplicates' in args:
+            logging.info("Removing duplicates")
+            self.remove_duplicates()
+            logging.info("All duplicates were removed!")
+        self.print_stats()
     
-file_sorter.print_stats()
+    # Getter methods for global counters
+    def get_files_found(self) -> int:
+        return self.filesFound
+    
+    def get_files_removed(self) -> int:
+        return self.filesRemoved
+    
+    def get_file_duplicates(self) -> int:
+        return self.fileDuplicates
+    
+    def get_files_moved(self) -> int:
+        return self.filesMoved
+    
+    def get_files_renamed(self) -> int:
+        return self.filesRenamed
+    
+    def get_files_ignored(self) -> int:
+        return self.filesIgnored
+
+
+if __name__ == "__main__":    
+    CONFIG_LAYOUT = {
+                "DOWNLOAD_FOLDER_PATH" : "path/to/downloadfolder",
+                "ALLOW_DUPLICATES" : False,
+                "DELETE_LOGS_AFTER_DAYS" : -1,
+                "DELETE_FILES_AFTER_DAYS" : -1,
+                "FOLDERS" : { "FOLDER_NAME": ["FILE_SUFFIX_1","FILE_SUFFIX_2"], "FOLDER_NAME2": ["FILE_SUFFIX_1","FILE_SUFFIX_2"] }
+            }
+
+    if not os.path.isdir("logs"):
+        os.mkdir("logs")
+
+    logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+
+    file_sorter = FileSorter(config_layout=CONFIG_LAYOUT)
+    file_sorter.clean_logs()
+    file_sorter.sort_files()
+
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "rm_duplicates":
+            logging.info("Removing duplicates")
+            file_sorter.remove_duplicates()
+            logging.info("All duplicates were removed!")
+
+        
+    file_sorter.print_stats()

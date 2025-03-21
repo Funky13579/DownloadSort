@@ -6,9 +6,12 @@ import shutil
 import sys
 from datetime import date, timedelta
 
+logging.basicConfig(filename=f"./logs/OutputLog_{date.today().strftime("%d_%m_%Y")}.log", level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
 
 class FileSorter:
     def __init__(self, config_layout):
+        
         self.filesFound: int = 0
         self.filesRemoved: int = 0
         self.fileDuplicates: int = 0
@@ -16,6 +19,7 @@ class FileSorter:
         self.filesRenamed: int = 0
         self.filesIgnored: int = 0
         self.root_path = os.getcwd()
+        self.current_task = None
         
         try:
             self.config: dict = self.load_config(config_layout=config_layout)
@@ -121,6 +125,8 @@ class FileSorter:
         logging.info(f"{file} was moved to {folder}")
     
     def remove_file_after_time(self, file, days) -> None:
+        if days < 0: return
+       
         remove_date: date = (date.today() - timedelta(days=days))
         file_date: date = date.fromtimestamp(os.path.getmtime(file))
         
@@ -151,19 +157,43 @@ class FileSorter:
         self.filesIgnored += 1
 
     def clean_logs(self):
+        self.current_task = "Cleaning logs"
         for file in os.listdir(f"{self.root_path}/logs"):
             if file.endswith(".log"):
                 self.remove_file_after_time(f"./logs/{file}", self.config.get("DELETE_LOGS_AFTER_DAYS"))
         
+    def calculate_workload(self, args) -> None:
+        """ Calculate the total number of files to be processed """
+        os.chdir(self.config.get("DOWNLOAD_FOLDER_PATH"))
+        self.processed_files = 0
+        self.total_files = 0
+        
+        if 'rm_duplicates' in args:
+            self.total_files += self.count_files_in_subdirectories(self.config.get("DOWNLOAD_FOLDER_PATH"))
+        else:
+            # Count files to process (only regular files)
+            files = [f for f in os.listdir() if os.path.isfile(f)]
+            self.total_files = len(files)
+                   
+    def count_files_in_subdirectories(self, path):
+        """ Count files in subdirectories """
+        filecount = 0
+        for file in os.listdir(path):
+            full_file = os.path.join(path, file)
+            if os.path.isfile(full_file):
+                filecount += 1
+            elif os.path.isdir(full_file):
+                filecount += self.count_files_in_subdirectories(full_file)
+        return filecount
+       
+    
     def sort_files(self) -> None:
         """ Sort files in the download folder """
+        self.current_task = "Sorting files"
+        
         os.chdir(self.config.get("DOWNLOAD_FOLDER_PATH"))
-        logging.info("Moved to download directory")
-        self.check_directories()
-        # Count files to process (only regular files)
         files = [f for f in os.listdir() if os.path.isfile(f)]
-        self.total_files = len(files)
-        self.processed_files = 0
+        
         for file in files:
             self.processed_files += 1
             percent = int((self.processed_files / self.total_files) * 100) if self.total_files else 100
@@ -193,11 +223,17 @@ class FileSorter:
         empty = '-' * (10 - (percent // 10))
         return f"[{filled}{empty}] {percent}%"
 
+    def get_current_task(self) -> str:
+        """Returns the current task being performed."""
+        return self.current_task
+    
     def remove_duplicates(self, path=None) -> None:
         """ Remove duplicates in the download folder
             Needs to be called with cmd argument "rm_duplicates"
             Takes a long time for large folders
         """
+        
+        self.current_task = "Removing duplicates"
         
         if path is None:
             path = self.config.get("DOWNLOAD_FOLDER_PATH")
@@ -213,6 +249,7 @@ class FileSorter:
                             os.remove(full_file2)
                             self.filesRemoved += 1
                             logging.info(f"{file2} was a duplicate of {file} and was removed")
+                self.processed_files += 1
             elif os.path.isdir(full_file):
                 self.remove_duplicates(path=full_file)
                 
@@ -226,6 +263,11 @@ class FileSorter:
     
     def start_sorting(self, *args) -> None:
         """Starts sorting based on provided arguments."""
+        
+        os.chdir(self.config.get("DOWNLOAD_FOLDER_PATH"))
+        logging.info(f"Moved to {self.config.get("DOWNLOAD_FOLDER_PATH")} directory")
+        
+        self.calculate_workload(args)
         self.clean_logs()
         self.sort_files()
         if 'rm_duplicates' in args:

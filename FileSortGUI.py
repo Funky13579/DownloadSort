@@ -1,7 +1,7 @@
 import os
 import json
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog, ttk
 import tkinter.filedialog as tk_filedialog
 import threading
 from FileSort import FileSorter
@@ -33,7 +33,6 @@ class FileSorterApp:
         self.create_widgets()
         self.refresh_config_display()
         
-        # Start console refresh loop
         self.refresh_console()
         
         self.root_dir = os.getcwd()
@@ -274,6 +273,7 @@ class FileSorterApp:
         with open(CONFIG_PATH, "w") as f:
             json.dump(self.config, f, indent=4)
         messagebox.showinfo(title="Saved", message="config.json has been saved.")
+        self.file_sorter.load_config(self.config)
         self.refresh_config_display()
     
     def start_filesorter(self):
@@ -284,8 +284,46 @@ class FileSorterApp:
         # Run sorting in a separate thread so GUI remains responsive
         def run_sorter():
             self.file_sorter.start_sorting(*args)
+        
         threading.Thread(target=run_sorter, daemon=True).start()
-        messagebox.showinfo(title="Started", message="FileSorter was started in background.")
+        self.start_sorter_progress_widget()
+        
+    def start_sorter_progress_widget(self):
+        
+        widget = tk.Toplevel(self.root)
+        widget.title("FileSorter Progress")
+        
+        tk.Label(widget, text="FileSorter Progress", font=("Arial", 14)).pack(pady=10)
+        
+        progress_bar = ttk.Progressbar(widget, orient="horizontal", length=300, mode="determinate")
+        progress_bar.pack(pady=10)
+        
+        percent_label = tk.Label(widget, text="0%", font=("Arial", 12))
+        percent_label.pack(pady=5)
+        
+        cancel_button = tk.Button(widget, text="Cancel", command=widget.destroy)
+        cancel_button.pack(pady=10)
+        
+        status_label = tk.Label(widget, text="Starting...", font=("Arial", 10))
+        status_label.pack(pady=5)
+        
+        
+        def update_progress(progress_bar=progress_bar, percent_label=percent_label, status_label=status_label):
+            progress = self.file_sorter.get_progress_percent()
+            progress_bar["value"] = progress
+            percent_label.config(text=f"{progress}%")
+            status_label.config(text=self.file_sorter.get_current_task())
+            if progress < 100:
+                widget.after(50, update_progress)
+            else:
+                progress_bar["value"] = 100
+                percent_label.config(text="100%")
+                status_label.config(text="Sorting complete.")
+
+        # Start periodic progress updates on the main thread
+        widget.after(50, update_progress)
+        
+        widget.mainloop()
     
     def refresh_console(self):
         # Refresh the console every second with FileSorter stats and progress
@@ -337,8 +375,13 @@ class FileSorterApp:
     
     def on_entry_change(self, var_name, value):
         
+        if value is None:
+            self.delete_logs_var.set(-1)
+            return False
+        
         if value in ("", "-"):
-            return
+            self.delete_logs_var.set(-1)
+            return False
         
         if var_name in self.config.keys():
             self.config[var_name] = value
@@ -348,6 +391,6 @@ class FileSorterApp:
 if __name__ == "__main__":
     root = tk.Tk()
     # Set window geometry
-    root.geometry(newGeometry="1200x800")
+    root.geometry(newGeometry="1200x1200")
     app = FileSorterApp(root=root)
     root.mainloop()

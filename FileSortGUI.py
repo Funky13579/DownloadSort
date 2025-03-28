@@ -47,7 +47,7 @@ class FileSorterApp:
                 json.dump(self.config, f, indent=4)
     
     def create_widgets(self):
-        # Title
+        
         title = tk.Label(self.root, text="FileSorter GUI", font=("Arial", 16))
         title.pack(pady=10)
         
@@ -88,6 +88,7 @@ class FileSorterApp:
         tk.Spinbox(config_options_frame, from_=DISABLED_NUMBER, to=MAX_DAYS, textvariable=self.delete_logs_var,
                    width=5, validate='key', validatecommand=validate_spinbox_days).grid(row=1, column=0)
         tk.Label(config_options_frame, text="Delete Logs After Days").grid(row=1, column=1, padx=5)
+        tk.Label(config_options_frame, text="(-1 = Never)").grid(row=1, column=2, padx=5)
         
         # Config delete files after days
         self.delete_files_var = tk.IntVar()
@@ -96,6 +97,7 @@ class FileSorterApp:
         tk.Spinbox(config_options_frame, from_=DISABLED_NUMBER, to=MAX_DAYS, textvariable=self.delete_files_var,
                    width=5, validate='key', validatecommand=validate_spinbox_days).grid(row=2, column=0)
         tk.Label(config_options_frame, text="Delete Files After Days").grid(row=2, column=1, padx=5)
+        tk.Label(config_options_frame, text="(-1 = Never)").grid(row=2, column=2, padx=5)
         
         # Frame for folder management
         folder_frame = tk.LabelFrame(config_frame, text="Manage Folders")
